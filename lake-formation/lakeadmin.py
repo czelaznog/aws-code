@@ -7,11 +7,18 @@ import sys
 import pprint
 import time
 import botostubs
-
+import getopt
+import awswrangler as wr
+import pandas as pd
+from tabulate import tabulate
 
 # Starts Multipart Upload
 def start_upload(bucket, key):
     s3_client = boto3.client('s3')
+
+    
+
+
 
     response = s3_client.create_multipart_upload(
         Bucket = bucket,
@@ -38,6 +45,8 @@ def add_part(proc_queue, body, bucket, key, part_number, upload_id):
 
 # End Multipart Upload
 def end_upload(bucket, key, upload_id, finished_parts):
+
+
     s3_client = boto3.client('s3')
 
     response = s3_client.complete_multipart_upload(
@@ -61,6 +70,79 @@ def get_stack_names(stack_filter):
       StackStatusFilter = stack_filter
     )
     return response['StackSummaries']
+
+def get_db_permissions_df( DataFrameColumns=list, PrincipalDatabasePermissions=list):
+
+    df = pd.DataFrame(columns=DataFrameColumns)
+    for p in PrincipalDatabasePermissions:
+        for rp in p['Permissions']:
+            df_row = []
+            df_row.append(p['Principal']['DataLakePrincipalIdentifier'])
+            df_row.append(p['Resource']['Database']['CatalogId'])
+            df_row.append('database')
+            df_row.append(p['Resource']['Database']['Name'])
+            df_row.append(rp)
+            df = df.append(pd.DataFrame([df_row], columns=DataFrameColumns), ignore_index=False )
+
+    return df
+
+
+def get_table_principal_permissions( *, CatalogId = None, DatabaseName = None, TableName = None):
+    
+    Resource = {
+        'Table': {
+            'CatalogId': CatalogId,
+            'DatabaseName': DatabaseName,
+            'Name': TableName
+        }
+    }
+
+    client = boto3.client('lakeformation') # type: botostubs.LakeFormation
+    principal_permissions = []
+    result = client.list_permissions(
+        CatalogId=CatalogId, 
+        Resource=Resource
+    )
+    principal_permissions = result['PrincipalResourcePermissions']
+    fetch = True
+
+    while fetch:
+        try:
+            token = result['NextToken']
+            result = client.list_permissions(CatalogId=CatalogId,Resource=Resource, NextToken=token)
+            principal_permissions.extend(result['PrincipalResourcePermissions'])
+        except:
+            fetch = False
+
+    return principal_permissions
+
+def get_database_principal_permissions( *, CatalogId = None, DatabaseName = None):
+
+    Resource = {
+        'Database': {
+            'CatalogId': CatalogId,
+            'Name': DatabaseName
+        }
+    }
+
+    client = boto3.client('lakeformation') # type: botostubs.LakeFormation
+    principal_permissions = []
+    result = client.list_permissions(
+        CatalogId=CatalogId, 
+        Resource=Resource
+    )
+    principal_permissions = result['PrincipalResourcePermissions']
+    fetch = True
+
+    while fetch:
+        try:
+            token = result['NextToken']
+            result = client.list_permissions(CatalogId=CatalogId,Resource=Resource, NextToken=token)
+            principal_permissions.extend(result['PrincipalResourcePermissions'])
+        except:
+            fetch = False
+
+    return principal_permissions
 
 def get_principal_database_permissions( *, Principal = None, CatalogId = None, DatabaseName = None,  separator = " " ):
 
@@ -157,7 +239,6 @@ def get_table_names(*, DatabaseName=None):
         result.append(t['Name'])
     return result
         
-
 def get_database_names():
     client = boto3.client('glue')
     result = []
@@ -227,87 +308,37 @@ def main1():
             pid+=1
 
 
-
 if __name__ == '__main__':
 
     # databases = get_database_names()
     # for db in databases:
-    #     tables = get_table_names(DatabaseName=db)
-    #     for table in tables:
-    #         print(db + " " + table)
-
-    lf = boto3.client('lakeformation')
-    # glue = boto3.client('glue')
-    s3client = boto3.client('s3')  # type: botostubs.S3
-    client = boto3.client('s3')  # type: botostubs.S3
-    
-    
-    
-    
-    
-    
-    
-    
-    
-
-    
-    
-
-
+        
 
     CatalogId='821879089030'
-
-    ResourceType='DATABASE'
-    ResourceCatalog={
-        'Catalog': {}
-    }
-    ResourceDatabase={
-        'Database': {
-            'CatalogId': '821879089030',
-            'Name': 'arcosdorados_datalake_core_flexcash_db'
-        }
-    }
-    ResourceDataLocation={
-        'DataLocation': {
-            'CatalogId': '821879089030',
-            'ResourceArn': 'arn:aws:s3:::arcosdorados-datalake-dev-us-east-1-821879089030-stage'
-        }
-    }
-    ResourceTable={
-        'Table': {
-            'CatalogId': '821879089030',
-            'DatabaseName': 'arcosdorados_datalake_core_flexcash_db',
-            'Name': 'tb_register_pre_stage'
-            #'TableWildcard': {}
-        }
-    }
+    db_df_columns = ['principal', 'catalog_id', 'resource', 'database_name', 'permission']
+    databases = get_database_names()
+    db_df = pd.DataFrame(columns=db_df_columns)
+    for db in databases:
+        db_principal_permissions = get_database_principal_permissions( CatalogId=CatalogId, DatabaseName=db)
+        df = get_db_permissions_df( db_df_columns, db_principal_permissions)
+        db_df = db_df.append(df)
 
 
+        print(tabulate(db_df, showindex=False, headers=db_df.columns))
 
-    res = lf.list_permissions(CatalogId=CatalogId,Resource=ResourceTable,ResourceType="TABLE")
-    fetch = True
+
+        
+
+        # tables = get_table_names(DatabaseName=db)
+        # for table in tables:
+        #     t_principal_permissions = get_table_principal_permissions( CatalogId=CatalogId, DatabaseName=db, TableName=table)
+        #     for tp in t_principal_permissions:
+        #         print(tp)
+
     
-    permissions = res['PrincipalResourcePermissions']
-    for permission in permissions:
-        for p in permission['Permissions']:
-            print(permission['Principal']['DataLakePrincipalIdentifier'] + " " + str(permission['Resource']) + " " + p)
-
-
-
-    while fetch:
-
-        try:
-
-            token = res['NextToken']
-            res = lf.list_permissions(CatalogId=CatalogId,Resource=ResourceTable, ResourceType="TABLE", NextToken=token)
-            permissions = res['PrincipalResourcePermissions']
-            for permission in permissions:
-                for p in permission['Permissions']:
-                    print(permission['Principal']['DataLakePrincipalIdentifier'] + " " + str(permission['Resource']) + " " + p)
-
-        except:
-            print("done")
-            fetch = False
+    
+    
+    
 
     
 
