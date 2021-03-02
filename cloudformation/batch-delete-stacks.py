@@ -92,11 +92,7 @@ def main():
         pprint.pprint(response)
         print("")
         
-        
     
-
-    
-
 
 if __name__ == '__main__':
     main()

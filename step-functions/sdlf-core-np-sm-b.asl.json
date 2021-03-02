@@ -1,0 +1,102 @@
+{
+  "Comment": "Simple pseudo flow",
+  "StartAt": "Try",
+  "States": {
+    "Try": {
+      "Type": "Parallel",
+      "Branches": [
+        {
+          "StartAt": "ExtractContextDetails",
+          "States":
+          {
+            "ExtractContextDetails": {
+                    "Parameters": {
+                      "arn.$": "$$.Execution.Id"
+                    },
+                    "Type": "Pass",
+                    "ResultPath": "$.contextDetails",
+                    "Next": "Process Data"
+            },
+            "Process Data":
+            {
+              "Type": "Task",
+              "Resource": "arn:aws:lambda:us-east-1:821879089030:function:sdlf-core-np-process-b",
+              "Comment": "Process Data",
+              "ResultPath": "$.body.job",
+              "Retry": [ {
+                 "ErrorEquals": ["IncompleteDataException"],
+                 "IntervalSeconds": 5000,
+                 "MaxAttempts": 10,
+                 "BackoffRate": 2.0
+              } ],
+              "Next": "Post-update Comprehensive Catalogue"
+            },
+            "Post-update Comprehensive Catalogue":
+            {
+              "Type": "Task",
+              "Resource": "arn:aws:lambda:us-east-1:821879089030:function:sdlf-core-np-postupdate-b",
+              "Comment": "Post-update Comprehensive Catalogue",
+              "ResultPath": "$.statusCode",
+              "Next": "ChoiceState"
+            },
+            "ChoiceState": {
+              "Type": "Choice",
+              "Choices": [{
+                    "Variable": "$.body.job.retry",
+                    "BooleanEquals": true,
+                    "Next": "RetryState"
+              }],
+              "Default": "Data Quality"
+            },
+            "RetryState":
+            {
+             "Type": "Task",
+             "Resource": "arn:aws:lambda:us-east-1:821879089030:function:sdlf-core-np-retry-route-b",
+             "Comment": "Sending message to the retry mechanism",
+             "ResultPath": "$.statusCode",
+             "End": true
+            },
+            "Data Quality":
+            {
+              "Type":"Task",
+              "Resource":"arn:aws:states:::states:startExecution",
+              "Parameters":{
+                  "StateMachineArn":"arn:aws:states:us-east-1:821879089030:stateMachine:sdlf-data-quality-sm",
+                  "Input": {"body.$": "$.body"}
+              },
+              "Retry":[
+                {
+                    "ErrorEquals":[
+                      "StepFunctions.ExecutionLimitExceeded"
+                    ]
+                }
+              ],
+              "Comment": "Data Quality",
+              "End": true
+            }
+          }
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [ "States.ALL" ],
+          "ResultPath": null,
+          "Next": "Error"
+        }
+      ],
+      "Next": "Done"
+    },
+    "Done": {
+      "Type": "Succeed"
+    },
+    "Error": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:821879089030:function:sdlf-core-np-error-b",
+      "Comment": "Send Original Payload to DLQ",
+      "Next": "Failed"
+    },
+    "Failed": {
+      "Type": "Fail"
+    }
+  }
+}
