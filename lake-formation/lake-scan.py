@@ -13,66 +13,7 @@ import pandas as pd
 import re
 from tabulate import tabulate
 
-# Starts Multipart Upload
-def start_upload(bucket, key):
-    s3_client = boto3.client('s3')
-
-    
-
-
-
-    response = s3_client.create_multipart_upload(
-        Bucket = bucket,
-        Key = key
-    )
-
-    return response['UploadId']
-
-# Add upload part
-def add_part(proc_queue, body, bucket, key, part_number, upload_id):
-    s3_client = boto3.client('s3')
-
-    response = s3_client.upload_part(
-        Body = body,
-        Bucket = bucket,
-        Key = key,
-        PartNumber = part_number,
-        UploadId = upload_id
-    )
-
-    print(f"Finished Part: {part_number}, ETag: {response['ETag']}")
-    proc_queue.put({'PartNumber': part_number, 'ETag': response['ETag']})
-    return
-
-# End Multipart Upload
-def end_upload(bucket, key, upload_id, finished_parts):
-
-
-    s3_client = boto3.client('s3')
-
-    response = s3_client.complete_multipart_upload(
-        Bucket = bucket,
-        Key = key,
-        MultipartUpload={
-            'Parts': finished_parts
-        },
-        UploadId = upload_id
-    )
-
-    return response
-
-def get_stack_names(stack_filter):
-
-    cfn_client = boto3.client(
-        'cloudformation',
-        region_name = 'us-east-2'
-    )
-    response = cfn_client.list_stacks(
-      StackStatusFilter = stack_filter
-    )
-    return response['StackSummaries']
-
-def get_db_permissions_df( DataFrameColumns=list, PrincipalDatabasePermissions=list):
+def get_db_permissions_df( DataFrameColumns=list, PrincipalDatabasePermissions=list, resource_permission = str):
 
     df = pd.DataFrame(columns=DataFrameColumns)
     for p in PrincipalDatabasePermissions:
@@ -83,12 +24,12 @@ def get_db_permissions_df( DataFrameColumns=list, PrincipalDatabasePermissions=l
             df_row.append('database')
             df_row.append(p['Resource']['Database']['Name'])
             df_row.append(rp)
-            df = df.append(pd.DataFrame([df_row], columns=DataFrameColumns), ignore_index=False )
+            if( resource_permission is None or resource_permission == rp ):
+                df = df.append(pd.DataFrame([df_row], columns=DataFrameColumns), ignore_index=False )
 
     return df
 
-
-def get_table_permissions_df( table, DataFrameColumns=list, PrincipalDatabasePermissions=list, table_expression=str):
+def get_table_permissions_df( table, DataFrameColumns=list, PrincipalDatabasePermissions=list, table_expression=str, resource_permission = str):
 
     df = pd.DataFrame(columns=DataFrameColumns)
     for p in PrincipalDatabasePermissions:
@@ -111,8 +52,9 @@ def get_table_permissions_df( table, DataFrameColumns=list, PrincipalDatabasePer
                 lakeformation_table = p['Resource']['TableWithColumns']['Name']
                 df_row.append('true')               
             df_row.append(rp)
-            if table_name_validation(lakeformation_table, table_expression):
-                df = df.append(pd.DataFrame([df_row], columns=DataFrameColumns), ignore_index=False )
+            if( resource_permission is None or resource_permission == rp ):
+                if table_name_validation(lakeformation_table, table_expression):
+                    df = df.append(pd.DataFrame([df_row], columns=DataFrameColumns), ignore_index=False )
 
     df.drop_duplicates(inplace=True, ignore_index=True)
     return df
@@ -183,33 +125,13 @@ def get_database_principal_permissions( *, CatalogId = None, DatabaseName = None
 
     return principal_permissions
 
-def delete_stack(stack_name, stack_region):
-    cfn_client = boto3.client(
-        'cloudformation',
-        region_name = stack_region
-    )
-    response = cfn_client.delete_stack(
-        StackName=stack_name,
-    )
-    return response
-
-# Primary logic
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument('-c', '--catalog', help = "Filter by catalog name")
-    ap.add_argument('-d', '--database', help = "Filter database by regex pattern")
-    ap.add_argument('-f', '--filter', help = "Filter condition for listing stacks")
-    ap.add_argument('-k', '--key', help = "Key for destination object")
-    ap.add_argument('-p', '--processes', type = int, choices = range(1,256), metavar = '[1-256]', default = 10, help = "Number of upload processes to run simultaneously")
-
 def get_table_names(*, DatabaseName=None):
     client = boto3.client('glue')
     result = []
     table_list = client.get_tables(DatabaseName=DatabaseName)
     for t in table_list['TableList']:
         result.append(t['Name'])
-    return result
-        
+    return result       
 
 def get_database_names():
     client = boto3.client('glue')
@@ -219,7 +141,6 @@ def get_database_names():
         result.append(d['Name'])
     return result
 
-
 def database_name_validation( database_name, expression ):
     regex = re.compile(expression)
     return regex.match(database_name)
@@ -228,7 +149,7 @@ def table_name_validation( table_name, expression ):
     regex = re.compile(expression)
     return regex.match(table_name)
 
-def show_table_permissions( catalog_id, database_expression, table_expression, principal):
+def show_table_permissions( catalog_id, database_expression, table_expression, principal, resource_permission):
 
     if principal is not None:
         principal_dict = { 'DataLakePrincipalIdentifier': principal }
@@ -248,14 +169,14 @@ def show_table_permissions( catalog_id, database_expression, table_expression, p
             for table in tables:
                 if table_name_validation(table, table_expression) or skip:
                     table_principal_permissions = get_table_principal_permissions( CatalogId=catalog_id, DatabaseName=db, TableName=table, Principal=principal_dict)
-                    df = get_table_permissions_df(table, df_columns, table_principal_permissions, table_expression)
+                    df = get_table_permissions_df(table, df_columns, table_principal_permissions, table_expression, resource_permission)
                     fdf = fdf.append(df, ignore_index=True)
 
     fdf.reset_index(drop=True, inplace=True)
     fdf.drop_duplicates(inplace=True, ignore_index=False)
     print(tabulate(fdf, showindex=True, headers=fdf.columns, tablefmt='psql'))
 
-def show_database_permissions( catalog_id, database_expression, principal):
+def show_database_permissions( catalog_id, database_expression, principal, resource_permission):
 
     if principal is not None:
         principal_dict = { 'DataLakePrincipalIdentifier': principal }
@@ -269,7 +190,7 @@ def show_database_permissions( catalog_id, database_expression, principal):
     for db in databases:
         if database_name_validation( db, database_expression ):
             db_principal_permissions = get_database_principal_permissions( CatalogId=catalog_id, DatabaseName=db, Principal=principal_dict)
-            df = get_db_permissions_df( db_df_columns, db_principal_permissions)
+            df = get_db_permissions_df( db_df_columns, db_principal_permissions, resource_permission)
             db_df = db_df.append(df, ignore_index=True)
 
     print(tabulate(db_df, showindex=True, headers=db_df.columns, tablefmt='psql'))
@@ -282,12 +203,16 @@ if __name__ == '__main__':
     ap.add_argument('-c', '--catalog', help = "Filter by catalog name")
     ap.add_argument('-d', '--database', help = "Filter database name by regex pattern")
     ap.add_argument('-t', '--table', help = "Filter glue table name by regex pattern")
+    ap.add_argument('-s', '--resource_permission', help = "Filter resource permission by permmission name")
     
     args = vars(ap.parse_args())
 
     
     if args['database'] in [None, '']:
         args['database'] = "."
+    
+    if args['resource_permission'] in [None, '']:
+        args['resource_permission'] = None
 
     if args['table'] in [None, '']:
         args['table'] = "."
@@ -302,10 +227,11 @@ if __name__ == '__main__':
     database_expression = args['database']
     table_expression = args['table']
     resource_type = args['resource'] 
+    resource_permission = args['resource_permission']
     principal = args['principal']
 
 
     if resource_type == 'database':
-        show_database_permissions( catalog_id, database_expression, principal )
+        show_database_permissions( catalog_id, database_expression, principal, resource_permission )
     elif resource_type == 'table':
-        show_table_permissions( catalog_id, database_expression, table_expression, principal )
+        show_table_permissions( catalog_id, database_expression, table_expression, principal, resource_permission )
