@@ -12,6 +12,7 @@ python lake-scan -r resource_type [-p PRINCIPAL] [-d DATABASE] [-t TABLE] [-s PE
 
 ### - options
 
+- **-r RESOURCE**, specifies the resource type. It will scan permissions for this resource type. Valid values are **table** and **database**.
 - **-p PRINCIPAL**, filters the results by the princpal ARN. You must specify the complete AWS ARN in the option.
 - **-d DATABASE**, filter the results by databases names. You can also add a regular expression in the parameter and it will be evaluated during the filter.
 - **-d TABLE**, filter the results by table names. You can also add a regular expression in the parameter and it will be evaluated during the filter.
