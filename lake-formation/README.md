@@ -4,7 +4,7 @@ General utility scripts for Lake Formation Administrators. With the script you c
 
 ## 1. lake-scan
 
-Script to scan lake formationn permissions.
+Script to scan lake formation permissions.
 
 ### - usage
 

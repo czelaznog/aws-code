@@ -1,0 +1,143 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Health Aggregation - Deployment Stack. **Attention** This template creates AWS
+  resources that will incur charges on your account.
+Resources:
+  network:
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: >-
+        https://search-sa-log-solutions.s3-us-east-2.amazonaws.com/health-aggregation/health-aggregation-network.json
+      Parameters:
+        EnvironmentTag: !Select 
+          - '4'
+          - !Split 
+            - '-'
+            - !Select 
+              - '2'
+              - !Split 
+                - /
+                - !Ref 'AWS::StackId'
+        CIDRPrefix: '10.1'
+  slr:
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: >-
+        https://search-sa-log-solutions.s3-us-east-2.amazonaws.com/health-aggregation/health-aggregation-slr.json
+      Parameters:
+        NetworkStackName: !GetAtt 
+          - network
+          - Outputs.StackName
+  cognito:
+    Type: 'AWS::CloudFormation::Stack'
+    DependsOn: slr
+    Properties:
+      TemplateURL: >-
+        https://search-sa-log-solutions.s3-us-east-2.amazonaws.com/health-aggregation/health-aggregation-cognito.json
+      Parameters:
+        NetworkStackName: !GetAtt 
+          - network
+          - Outputs.StackName
+  elasticsearch:
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: >-
+        https://search-sa-log-solutions.s3-us-east-2.amazonaws.com/health-aggregation/health-aggregation-es-domain.json
+      Parameters:
+        NetworkStackName: !GetAtt 
+          - network
+          - Outputs.StackName
+        CognitoStackName: !GetAtt 
+          - cognito
+          - Outputs.StackName
+        ElasticsearchDomainName: !Join 
+          - ''
+          - - healthevents-
+            - !Select 
+              - '4'
+              - !Split 
+                - '-'
+                - !Select 
+                  - '2'
+                  - !Split 
+                    - /
+                    - !Ref 'AWS::StackId'
+  proxy:
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: >-
+        https://search-sa-log-solutions.s3-us-east-2.amazonaws.com/health-aggregation/health-aggregation-kibana-proxy.json
+      Parameters:
+        NetworkStackName: !GetAtt 
+          - network
+          - Outputs.StackName
+        ElasticsearchStackName: !GetAtt 
+          - elasticsearch
+          - Outputs.StackName
+        CognitoStackName: !GetAtt 
+          - cognito
+          - Outputs.StackName
+  lambda:
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: >-
+        https://search-sa-log-solutions.s3-us-east-2.amazonaws.com/health-aggregation/health-aggregation-lambda.json
+      Parameters:
+        NetworkStackName: !GetAtt 
+          - network
+          - Outputs.StackName
+        ElasticsearchStackName: !GetAtt 
+          - elasticsearch
+          - Outputs.StackName
+Outputs:
+  NetworkStack:
+    Description: NetworkStackName
+    Value: !GetAtt 
+      - network
+      - Outputs.StackName
+    Export:
+      Name: !Sub '${AWS::StackName}-NetworkStackName'
+  ElasticsearchEndpoint:
+    Description: ElasticsearchEndpoint
+    Value: !GetAtt 
+      - elasticsearch
+      - Outputs.ElasticsearchEndpoint
+    Export:
+      Name: !Sub '${AWS::StackName}-ElasticsearchEndpoint'
+  KibanaProxyURL:
+    Description: Kibana Proxy URL.
+    Value: !GetAtt 
+      - proxy
+      - Outputs.KibanaProxyURL
+    Export:
+      Name: !Sub '${AWS::StackName}-KibanaProxyURL'
+  CognitoUser:
+    Description: This is the cognito user.
+    Value: !GetAtt 
+      - cognito
+      - Outputs.CognitoUser
+    Export:
+      Name: !Sub '${AWS::StackName}-CognitoUser'
+  CognitoPassword:
+    Description: This is the cognito password.
+    Value: !GetAtt 
+      - cognito
+      - Outputs.CognitoPassword
+    Export:
+      Name: !Sub '${AWS::StackName}-CognitoPassword'
+  ElasticsearchDomainName:
+    Description: This is the cognito Amazon ES domain name.
+    Value: !Join 
+      - ''
+      - - baseline-
+        - !Select 
+          - '4'
+          - !Split 
+            - '-'
+            - !Select 
+              - '2'
+              - !Split 
+                - /
+                - !Ref 'AWS::StackId'
+    Export:
+      Name: !Sub '${AWS::StackName}-ElasticsearchDomainName'
