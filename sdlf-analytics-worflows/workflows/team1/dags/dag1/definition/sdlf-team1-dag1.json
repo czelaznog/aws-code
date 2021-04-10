@@ -1,0 +1,38 @@
+{
+    "dagname": "sdlf-team1-dag1",
+    "triggers": {
+        "t1": {
+            "name": "start-wf",
+            "type": "scheduled",
+            "cron": "cron",
+            "triggers": "job1"
+        },
+        "t2": {
+            "type": "event",
+            "condition": "succeeded",
+            "watching": "job1",
+            "triggers": "job2"
+        },        
+        "t3": {
+            "type": "event",
+            "condition": "succeeded",
+            "watching": "job2",
+            "triggers": "job3"
+        }
+    },
+    "jobs":{
+        "job1": {
+            "name": "sdlf-team1-dag1-job1",
+            "type": "glue-etl"
+        },
+        "job2": {
+            "name": "sdlf-team1-dag1-job2",
+            "type": "glue-etl"
+        },        
+        "job3": {
+            "name": "sdlf-team1-dag1-job3",
+            "type": "glue-etl"
+        }        
+    },
+    "role": "sdlf-analytics-role-team1"
+}

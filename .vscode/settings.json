@@ -1,5 +1,5 @@
 {
-    "python.pythonPath": "/Users/gocamilo/.pyenv/versions/datalake-arcos-3.7.4/bin/python",
+    "python.pythonPath": "/Users/gocamilo/.pyenv/versions/3.7.4/envs/ddb-es-test/bin/python",
     "python.linting.flake8Enabled": false,
     "python.linting.enabled": true,
     "python.linting.pylintEnabled": true,

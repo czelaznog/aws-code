@@ -64,7 +64,7 @@ def get_table_permissions_df( table, DataFrameColumns=list, PrincipalDatabasePer
                 df_row.append('table')
                 df_row.append(p['Resource']['TableWithColumns']['DatabaseName'])
                 if( table == 'ALL_TABLES'): df_row.append(table)
-                else: df_row.append(p['Resource']['Table']['Name'])
+                else: df_row.append(p['Resource']['TableWithColumns']['Name'])
                 df_row.append('true')               
             df_row.append(rp)
             if( resource_permission is None or resource_permission == rp ):

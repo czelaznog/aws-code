@@ -1,6 +1,6 @@
 # aws-code/lake-formation 
 
-General utility scripts for Lake Formation Administrators. With the script you can scan, grant or revoke lake formation permission. Filter by multiple criteria (resource type, database name, table name, principal arn, permission action) is supported. Python 3.7+ required.
+General utility script for Lake Formation Administrators. With the script you can scan, grant or revoke lake formation permission using Lake Formation python/boto3 client. Filter by multiple criteria (resource type, database name, table name, principal arn, permission action) is supported. Python 3.7+ required.
 
 ## 1. lakeformation.py
 

@@ -1,0 +1,111 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "DynamoDB Resources to be created by the common stack"
+
+Resources:
+  ######## DYNAMODB #########
+
+  rDynamoMainControl:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: "id"
+          AttributeType: "S"
+        - AttributeName: "business_date"
+          AttributeType: "S"
+        - AttributeName: "countrystatus"
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "id"
+          KeyType: "HASH"
+      BillingMode: PAY_PER_REQUEST
+      GlobalSecondaryIndexes:
+        - IndexName: countrystatus-index
+          KeySchema:
+            - AttributeName: countrystatus
+              KeyType: HASH
+            - AttributeName: business_date
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TableName: "MainControl"
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+
+
+  rDynamoOctagonExecutionHistory:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: pipeline
+          AttributeType: S
+        - AttributeName: last_updated_timestamp
+          AttributeType: S
+        - AttributeName: execution_date
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+        - AttributeName: status_last_updated_timestamp
+          AttributeType: S
+      BillingMode: PAY_PER_REQUEST
+      GlobalSecondaryIndexes:
+        - IndexName: pipeline-last-updated-index
+          KeySchema:
+            - AttributeName: pipeline
+              KeyType: HASH
+            - AttributeName: last_updated_timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: execution_date-status-index
+          KeySchema:
+            - AttributeName: execution_date
+              KeyType: HASH
+            - AttributeName: status
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: pipeline-execution_date-index
+          KeySchema:
+            - AttributeName: pipeline
+              KeyType: HASH
+            - AttributeName: execution_date
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: execution_date-last_updated-index
+          KeySchema:
+            - AttributeName: execution_date
+              KeyType: HASH
+            - AttributeName: last_updated_timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: status-last_updated-index
+          KeySchema:
+            - AttributeName: status
+              KeyType: HASH
+            - AttributeName: last_updated_timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: pipeline-status_last_updated-index
+          KeySchema:
+            - AttributeName: pipeline
+              KeyType: HASH
+            - AttributeName: status_last_updated_timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TableName: "PipelineExecutionHistory"
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
